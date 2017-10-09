@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__author__ = 'Wsine'
 
 from math import log
 import operator

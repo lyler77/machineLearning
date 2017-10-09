@@ -3,6 +3,7 @@
 from math import log
 import operator
 import treePlotter
+import numpy as np
 import re
 
 def calcShannonEnt(dataSet):
@@ -126,9 +127,13 @@ def classifyAll(inputTree, featLabels, testDataSet):
     描述：跑决策树
     """
     classLabelAll = []
+    accuracy=0
     for testVec in testDataSet:
-        classLabelAll.append(classify(inputTree, featLabels, testVec))
-    return classLabelAll
+        className=classify(inputTree, featLabels, testVec)
+        classLabelAll.append(className)
+        if testVec[-1]==className:
+            accuracy+=1
+    return classLabelAll,float(accuracy/len(testDataSet))
 
 def storeTree(inputTree, filename):
     """
@@ -151,41 +156,45 @@ def grabTree(filename):
     fr = open(filename, 'rb')
     return pickle.load(fr)
 
+def getlabels():
+    '''
+    从文件中获取属性名
+    '''
+    f = open(r'watermelon.txt', 'r')
+    labels = f.readlines()[0].strip('\n').split(',')[1:]
+    return labels
+
 def createDataSet():
-    """
-    outlook->  0: sunny | 1: overcast | 2: rain
-    temperature-> 0: hot | 1: mild | 2: cool
-    humidity-> 0: high | 1: normal
-    windy-> 0: false | 1: true
-    """
-    dataSet = [[0, 0, 0, 0, 'N'],
-               [0, 0, 0, 1, 'N'],
-               [1, 0, 0, 0, 'Y'],
-               [2, 1, 0, 0, 'Y'],
-               [2, 2, 1, 0, 'Y'],
-               [2, 2, 1, 1, 'N'],
-               [1, 2, 1, 1, 'Y']]
-    labels = ['outlook', 'temperature', 'humidity', 'windy']
-    return dataSet, labels
+    '''
+    七三分data为dataset和testset
+    '''
+    f=open(r'watermelon.txt','r')
+    dataSet = []
+    testSet=[]
+    lines=f.readlines()[1:]
+    all=np.arange(len(lines))
+    np.random.shuffle(all)
+    all=list(all)
+    train=int(len(lines)*0.7)
+    for i in range(len(lines)):
+        if i<train:
+            dataSet.append([w for w in lines[all[i]].strip('\n').split(',')[1:]])
+        else:
+            testSet.append([w for w in lines[all[i]].strip('\n').split(',')[1:]])
+    return dataSet,testSet
 
 def createTestSet():
-    """
-    outlook->  0: sunny | 1: overcast | 2: rain
-    temperature-> 0: hot | 1: mild | 2: cool
-    humidity-> 0: high | 1: normal
-    windy-> 0: false | 1: true
-    """
-    testSet = [[0, 1, 0, 0],
-               [0, 2, 1, 0],
-               [2, 1, 1, 0],
-               [0, 1, 1, 1],
-               [1, 1, 0, 1],
-               [1, 0, 1, 0],
-               [2, 1, 0, 1]]
-    return testSet
+
+    f=open(r'watermelon.txt','r')
+    testSet = []
+    lines=f.readlines()[1:]
+    for line in lines:
+        testSet.append([w for w in line.strip('\n').split(',')[1:]])
+    return testSet[:5]
 
 def main():
-    dataSet,labels= createDataSet()
+    dataSet,testSet= createDataSet()
+    labels=getlabels()
     labels_tmp = labels[:] # 拷贝，createTree会改变labels
     desicionTree = createTree(dataSet, labels_tmp)
     #storeTree(desicionTree, 'classifierStorage.txt')
@@ -193,7 +202,7 @@ def main():
     print('desicionTree:\n', desicionTree)
     treePlotter.createPlot(desicionTree)
     #testSet = createTestSet()
-    #print('classifyResult:\n', classifyAll(desicionTree, labels, testSet))
+    print('classifyResult:\n', classifyAll(desicionTree, labels, testSet))
 
 if __name__ == '__main__':
     main()
