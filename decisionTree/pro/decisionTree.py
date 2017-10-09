@@ -3,12 +3,14 @@
 from math import log
 import operator
 import treePlotter
+import numpy as np
+import re
 
 def calcShannonEnt(dataSet):
     """
     输入：数据集
     输出：数据集的香农熵
-    描述：计算给定数据集的香农熵；熵越大，数据集的混乱程度越大
+    描述：计算给定数据集的香农熵
     """
     numEntries = len(dataSet)
     labelCounts = {}
@@ -37,7 +39,31 @@ def splitDataSet(dataSet, axis, value):
             retDataSet.append(reduceFeatVec)
     return retDataSet
 
-def chooseBestFeatureToSplit(dataSet):
+def ID3Split(dataSet):
+    """
+    输入：数据集
+    输出：最好的划分维度
+    描述：选择最好的数据集划分维度
+    """
+    numFeatures = len(dataSet[0]) - 1
+    baseEntropy = calcShannonEnt(dataSet)
+    bestInfoGain = 0.0
+    bestFeature = -1
+    for i in range(numFeatures):
+        featList = [example[i] for example in dataSet]
+        uniqueVals = set(featList)
+        newEntropy = 0.0
+        for value in uniqueVals:
+            subDataSet = splitDataSet(dataSet, i, value)
+            prob = len(subDataSet)/float(len(dataSet))
+            newEntropy += prob * calcShannonEnt(subDataSet)
+        infoGain = baseEntropy - newEntropy
+        if (infoGain > bestInfoGain):
+            bestInfoGain = infoGain
+            bestFeature = i
+    return bestFeature
+
+def C4_5Split(dataSet):
     """
     输入：数据集
     输出：最好的划分维度
@@ -66,6 +92,29 @@ def chooseBestFeatureToSplit(dataSet):
             bestFeature = i
     return bestFeature
 
+def CARTSplit(dataSet):
+    """
+    输入：数据集
+    输出：最好的划分维度
+    描述：选择最好的数据集划分维度
+    """
+    numFeatures = len(dataSet[0]) - 1
+    bestGini = 999999.0
+    bestFeature = -1
+    for i in range(numFeatures):
+        featList = [example[i] for example in dataSet]
+        uniqueVals = set(featList)
+        gini = 0.0
+        for value in uniqueVals:
+            subDataSet = splitDataSet(dataSet, i, value)
+            prob = len(subDataSet)/float(len(dataSet))
+            subProb = len(splitDataSet(subDataSet, -1, 'N')) / float(len(subDataSet))
+            gini += prob * (1.0 - pow(subProb, 2) - pow(1 - subProb, 2))
+        if (gini < bestGini):
+            bestGini = gini
+            bestFeature = i
+    return bestFeature
+
 def majorityCnt(classList):
     """
     输入：分类类别列表
@@ -78,10 +127,10 @@ def majorityCnt(classList):
         if vote not in classCount.keys():
             classCount[vote] = 0
         classCount[vote] += 1
-    sortedClassCount = sorted(classCount.iteritems(), key=operator.itemgetter(1), reversed=True)
+    sortedClassCount = sorted(classCount.items(), key=operator.itemgetter(1), reverse=True)
     return sortedClassCount[0][0]
 
-def createTree(dataSet, labels):
+def createTree(dataSet, labels,chooseBestFeatureToSplit):
     """
     输入：数据集，特征标签
     输出：决策树
@@ -91,7 +140,7 @@ def createTree(dataSet, labels):
     if classList.count(classList[0]) == len(classList):
         # 类别完全相同，停止划分
         return classList[0]
-    if len(dataSet[0]) == 1:
+    if len(dataSet[0]) == 1:#分完了，没有属性了
         # 遍历完所有特征时返回出现次数最多的
         return majorityCnt(classList)
     bestFeat = chooseBestFeatureToSplit(dataSet)
@@ -103,7 +152,7 @@ def createTree(dataSet, labels):
     uniqueVals = set(featValues)
     for value in uniqueVals:
         subLabels = labels[:]
-        myTree[bestFeatLabel][value] = createTree(splitDataSet(dataSet, bestFeat, value), subLabels)
+        myTree[bestFeatLabel][value] = createTree(splitDataSet(dataSet, bestFeat, value), subLabels,chooseBestFeatureToSplit)
     return myTree
 
 def classify(inputTree, featLabels, testVec):
@@ -115,6 +164,7 @@ def classify(inputTree, featLabels, testVec):
     firstStr = list(inputTree.keys())[0]
     secondDict = inputTree[firstStr]
     featIndex = featLabels.index(firstStr)
+    classLabel = '否'
     for key in secondDict.keys():
         if testVec[featIndex] == key:
             if type(secondDict[key]).__name__ == 'dict':
@@ -129,10 +179,16 @@ def classifyAll(inputTree, featLabels, testDataSet):
     输出：决策结果
     描述：跑决策树
     """
+    print('classifying:')
     classLabelAll = []
+    accuracy=0
     for testVec in testDataSet:
-        classLabelAll.append(classify(inputTree, featLabels, testVec))
-    return classLabelAll
+        className=classify(inputTree, featLabels, testVec)
+        print(str(testVec[:-1]) + ' is classified as ' + className + ' ,and it\'s class is ' + testVec[-1])
+        classLabelAll.append(className)
+        if testVec[-1]==className:
+            accuracy+=1
+    return classLabelAll,float(accuracy/len(testDataSet))
 
 def storeTree(inputTree, filename):
     """
@@ -155,45 +211,43 @@ def grabTree(filename):
     fr = open(filename, 'rb')
     return pickle.load(fr)
 
+def getlabels():
+    '''
+    获取属性名
+    '''
+    # labels=['Clump Thickness','Uniformity of Cell Size','Uniformity of Cell Shape','Marginal Adhesion',
+    #         'Single Epithelial Cell Size','Bare Nuclei','Bland Chromatin','Normal Nucleoli','Mitoses','Class']
+    f=open(r'names.txt','r')
+    labels=[w for w in f.readlines()[0].strip('\n').split(',')[1:]]
+    return labels
+
 def createDataSet():
-    """
-    outlook->  0: sunny | 1: overcast | 2: rain
-    temperature-> 0: hot | 1: mild | 2: cool
-    humidity-> 0: high | 1: normal
-    windy-> 0: false | 1: true
-    """
-    dataSet = [[0, 0, 0, 0, 'N'],
-               [0, 0, 0, 1, 'N'],
-               [1, 0, 0, 0, 'Y'],
-               [2, 1, 0, 0, 'Y'],
-               [2, 2, 1, 0, 'Y'],
-               [2, 2, 1, 1, 'N'],
-               [1, 2, 1, 1, 'Y']]
-    labels = ['outlook', 'temperature', 'humidity', 'windy']
-    return dataSet, labels
+    '''
+    获取dataset
+    '''
+    f=open(r'traindata.txt','r')
+    dataSet=[]
+    raw=f.readlines()
+    for line in raw:
+        dataSet.append([w for w in line.strip('\n').split(',')[1:]])
+    return dataSet
 
 def createTestSet():
-    """
-    outlook->  0: sunny | 1: overcast | 2: rain
-    temperature-> 0: hot | 1: mild | 2: cool
-    humidity-> 0: high | 1: normal
-    windy-> 0: false | 1: true
-    """
-    testSet = [[0, 1, 0, 0],
-               [0, 2, 1, 0],
-               [2, 1, 1, 0],
-               [0, 1, 1, 1],
-               [1, 1, 0, 1],
-               [1, 0, 1, 0],
-               [2, 1, 0, 1]]
+
+    f=open(r'testdata.txt','r')
+    testSet=[]
+    raw=f.readlines()
+    for line in raw:
+        testSet.append([w for w in line.strip('\n').split(',')[1:]])
     return testSet
 
 def main():
-    dataSet, labels = createDataSet()
+    dataSet= createDataSet()
+    labels=getlabels()
     labels_tmp = labels[:] # 拷贝，createTree会改变labels
-    desicionTree = createTree(dataSet, labels_tmp)
-    #storeTree(desicionTree, 'classifierStorage.txt')
-    #desicionTree = grabTree('classifierStorage.txt')
+    #desicionTree = createTree(dataSet, labels_tmp, ID3Split)
+    #desicionTree = createTree(dataSet, labels_tmp, C4_5Split)
+    desicionTree = createTree(dataSet, labels_tmp, CARTSplit)
     print('desicionTree:\n', desicionTree)
     treePlotter.createPlot(desicionTree)
     testSet = createTestSet()
