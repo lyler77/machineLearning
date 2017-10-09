@@ -6,6 +6,48 @@ import treePlotter
 import numpy as np
 import re
 
+
+def splitDataSet_for_dec(dataSet, axis, value, small):
+    returnSet = []
+    for featVec in dataSet:
+        if (small and featVec[axis] <= value) or ((not small) and featVec[axis] > value):
+            retVec = featVec[:axis]
+            retVec.extend(featVec[axis + 1:])
+            returnSet.append(retVec)
+    return returnSet
+
+def DataSetPredo(decreteindex):
+    '''
+    预处理函数DataSetPredo，对数据集提前离散化
+    '''
+    dataSet=createDataSet()
+    labels=getlabels()
+    Entropy = calcShannonEnt(dataSet)
+    DataSetlen = len(dataSet)
+    for index in decreteindex:  # 对每一个是连续值的属性下标
+        for i in range(DataSetlen):
+            dataSet[i][index] = float(dataSet[i][index])
+        allvalue = [vec[index] for vec in dataSet]
+        sortedallvalue = sorted(allvalue)
+        T = []
+        for i in range(len(allvalue) - 1):  # 划分点集合
+            T.append(float(sortedallvalue[i] + sortedallvalue[i + 1]) / 2.0)
+        bestGain = 0.0
+        bestpt = -1.0
+        for pt in T:  # 对每个划分点
+            nowent = 0.0
+            for small in range(2):  # 化为正类负类
+                Dt = splitDataSet_for_dec(dataSet, index, pt, small)
+                p = len(Dt) / float(DataSetlen)
+                nowent += p * calcShannonEnt(Dt)
+            if Entropy - nowent > bestGain:
+                bestGain = Entropy - nowent
+                bestpt = pt
+        labels[index] = str(labels[index] + "<=" + "%.3f" % bestpt)
+        for i in range(DataSetlen):
+            dataSet[i][index] = "是" if dataSet[i][index] <= bestpt else "否"
+    return dataSet, labels
+
 def calcShannonEnt(dataSet):
     """
     输入：数据集
@@ -155,6 +197,7 @@ def createTree(dataSet, labels,chooseBestFeatureToSplit):
         myTree[bestFeatLabel][value] = createTree(splitDataSet(dataSet, bestFeat, value), subLabels,chooseBestFeatureToSplit)
     return myTree
 
+
 def classify(inputTree, featLabels, testVec):
     """
     输入：决策树，分类标签，测试数据
@@ -233,7 +276,6 @@ def createDataSet():
     return dataSet
 
 def createTestSet():
-
     f=open(r'testdata.txt','r')
     testSet=[]
     raw=f.readlines()
@@ -242,12 +284,12 @@ def createTestSet():
     return testSet
 
 def main():
-    dataSet= createDataSet()
-    labels=getlabels()
-    labels_tmp = labels[:] # 拷贝，createTree会改变labels
-    #desicionTree = createTree(dataSet, labels_tmp, ID3Split)
+    dataSet,labels= DataSetPredo([6,7])
+    #labels=getlabels()
+    labels_tmp = labels[:]  # 拷贝，createTree会改变labels
+    desicionTree = createTree(dataSet, labels_tmp, ID3Split)
     #desicionTree = createTree(dataSet, labels_tmp, C4_5Split)
-    desicionTree = createTree(dataSet, labels_tmp, CARTSplit)
+    #desicionTree = createTree(dataSet, labels_tmp, CARTSplit)
     print('desicionTree:\n', desicionTree)
     treePlotter.createPlot(desicionTree)
     testSet = createTestSet()
